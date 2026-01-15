@@ -1,3 +1,9 @@
+
+-- TODO:
+-- Case Match / Word Match searches
+-- Sepate files
+
+
 -- lazy.nvim bootstrap
 local lazypath = vim.fn.stdpath("data") .. "/lazy/lazy.nvim"
 if not vim.loop.fs_stat(lazypath) then
@@ -11,6 +17,8 @@ if not vim.loop.fs_stat(lazypath) then
   })
 end
 vim.opt.rtp:prepend(lazypath)
+
+
 
 require("lazy").setup({
   -- LSP
@@ -30,7 +38,51 @@ require("lazy").setup({
   -- File search (VS Code-like)
   {
     "nvim-telescope/telescope.nvim",
-    dependencies = { "nvim-lua/plenary.nvim" },
+    dependencies = {
+      "nvim-lua/plenary.nvim",
+      "nvim-telescope/telescope-fzf-native.nvim"
+    },
+    opts = function(_, opts)
+      local actions = require("telescope.actions")
+      local layout_actions = require("telescope.actions.layout")
+
+      opts.defaults = vim.tbl_deep_extend("force", opts.defaults or {}, {
+        prompt_prefix = "   ",
+        selection_caret = "❯ ",
+        path_display = { "truncate" },
+
+        sorting_strategy = "ascending",
+        layout_config = {
+          horizontal = {
+            prompt_position = "top",
+            preview_width = 0.55,
+          },
+        },
+
+        mappings = {
+          n = {
+            ["j"] = actions.move_selection_next,
+            ["k"] = actions.move_selection_previous,
+
+            -- Toggle preview (very useful for large projects)
+            ["p"] = layout_actions.toggle_preview,
+
+          },
+        },
+      })
+
+      -- Enable fuzzy algorithm (VS Code–like)
+      opts.extensions = {
+        fzf = {
+          fuzzy = true,
+          override_generic_sorter = true,
+          override_file_sorter = true,
+          case_mode = "smart_case", -- behaves like VS Code
+        },
+      }
+
+      return opts
+    end,
   },
 
   -- Gruvbox theme
@@ -42,6 +94,25 @@ require("lazy").setup({
   "nvim-treesitter/nvim-treesitter",
   build = ":TSUpdate",
   lazy = false,
+  
+  opts = {
+      ensure_installed = {
+        "markdown",
+        "markdown_inline",
+
+        -- languages you want highlighted inside ```
+        "cpp",
+        "c",
+        "lua",
+        "python",
+        "bash",
+        "json",
+        "yaml",
+      },
+      highlight = {
+        enable = true,
+      },
+    },
   config = function()
     -- nothing here, we’ll start manually
   end,
@@ -67,8 +138,52 @@ require("lazy").setup({
       vim.api.nvim_set_hl(0, "IlluminatedWordWrite", { bg = "#f3f3f3", ctermbg = 252, fg = nil })
     end,
   },
-}
+},
+{
+    "ibhagwan/fzf-lua",
+    dependencies = {
+      "nvim-tree/nvim-web-devicons",
+    },
+    config = function()
+      local fzf = require("fzf-lua")
 
+      fzf.setup({
+        winopts = {
+          height = 0.85,
+          width = 0.80,
+          preview = {
+            layout = "vertical",
+            vertical = "down:60%",
+          },
+        },
+
+        fzf_opts = {
+          ["--bind"] = table.concat({
+            "esc:toggle+clear-query",      -- Esc toggles “normal mode”
+            "j:down",                       -- move selection
+            "k:up",                         -- move selection
+            "ctrl-j:down",
+            "ctrl-k:up",
+          }, ","),
+          ["--no-multi"] = "",
+        },
+        files = {
+          prompt = "Files> ",
+          fd_opts = "--type f --hidden --follow --exclude .git",
+        },
+
+        grep = {
+          prompt = "Grep> ",
+          rg_opts =
+            "--column --line-number --no-heading --color=always --smart-case --max-columns=512",
+        },
+
+        buffers = {
+          prompt = "Buffers> ",
+        },
+      })
+    end,
+  },
 })
 
 require("nvim-treesitter.install").prefer_git = true
@@ -150,10 +265,18 @@ vim.lsp.enable("pyright")
 vim.g.mapleader = " "
 local telescope = require("telescope.builtin")
 
-vim.keymap.set("n", "ff", telescope.find_files, { desc = "Find files" })
-vim.keymap.set("n", "fg", telescope.live_grep, { desc = "Search text" })
-vim.keymap.set("n", "fb", telescope.buffers, { desc = "Buffers" })
-vim.keymap.set("n", "fh", telescope.help_tags, { desc = "Help" })
+
+
+local fzf = require("fzf-lua")
+
+vim.keymap.set("n", "ff", fzf.files, { desc = "Find files (fzf)" })
+vim.keymap.set("n", "fg", fzf.live_grep, { desc = "Live grep (fzf)" })
+vim.keymap.set("n", "fb", fzf.buffers, { desc = "Buffers (fzf)" })
+
+-- vim.keymap.set("n", "ff", telescope.find_files, { desc = "Find files" })
+-- vim.keymap.set("n", "fg", telescope.live_grep, { desc = "Search text" })
+-- vim.keymap.set("n", "fb", telescope.buffers, { desc = "Buffers" })
+-- vim.keymap.set("n", "fh", telescope.help_tags, { desc = "Help" })
 
 vim.api.nvim_set_keymap('n', 'rn', '<cmd>lua vim.lsp.buf.rename()<CR>', { noremap = true, silent = true })
 
